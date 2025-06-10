@@ -59,9 +59,9 @@ TPSpringBoot/
 
 ### 1. Create a Product
 ```bash
-curl -X POST \
--H "Content-Type: application/json" \
--d '{"name":"Stylo","price":2.5}' \
+curl -X POST 
+-H "Content-Type: application/json" 
+-d '{"name":"Stylo","price":2.5}' 
 http://localhost:8080/products
 ```
 ### 2. Get All Products
@@ -74,9 +74,9 @@ curl -X GET http://localhost:8080/products/1
 ```
 ### 4. Update Product
 ```bash
-curl -X PUT \
--H "Content-Type: application/json" \
--d '{"name":"Stylo Premium","price":3.5}' \
+curl -X PUT 
+-H "Content-Type: application/json" 
+-d '{"name":"Stylo Premium","price":3.5}' 
 http://localhost:8080/products/1
 ```
 ### 5. Delete Product
@@ -89,9 +89,9 @@ curl -X POST http://localhost:8080/products/1/duplicate
 ```
 ### 7. Create Bundle
 ```bash
-curl -X POST \
--H "Content-Type: application/json" \
--d '[1, 2, 3]' \
+curl -X POST 
+-H "Content-Type: application/json" 
+-d '[1, 2, 3]' 
 http://localhost:8080/products/bundle
 ```
 ## Running the Application
