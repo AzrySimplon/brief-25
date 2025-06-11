@@ -1,5 +1,6 @@
 package fr.azry.TPSpringBoot;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import fr.azry.TPSpringBoot.controller.ProductController;
 import fr.azry.TPSpringBoot.model.Product;
 import fr.azry.TPSpringBoot.repository.ProductRepository;
@@ -8,6 +9,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Arrays;
 import java.util.List;
@@ -16,180 +21,184 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.List;
+
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasSize;
+
+
+@SpringBootTest
+@AutoConfigureMockMvc
 class ProductControllerTest {
 
-    @Mock
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
     private ProductRepository repository;
 
-    @InjectMocks
-    private ProductController controller;
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    final private String URL = "http://localhost:8080/";
+
 
     private Product testProduct;
     private Product testProduct2;
 
     @BeforeEach
     void setUp() {
-        MockitoAnnotations.openMocks(this);
-
         // Initialize test products
         testProduct = new Product();
-        testProduct.setId(1L);
         testProduct.setName("Test Product");
         testProduct.setPrice(10.0);
 
         testProduct2 = new Product();
-        testProduct2.setId(2L);
         testProduct2.setName("Test Product 2");
         testProduct2.setPrice(20.0);
+
+        repository.deleteAll();
     }
 
+    // Test get all products
     @Test
-    void getAllProducts() {
-        // Arrange
-        List<Product> products = Arrays.asList(testProduct, testProduct2);
-        when(repository.findAll()).thenReturn(products);
+    void getAllProducts() throws Exception {
+        Product p1 = repository.save(testProduct);
+        Product p2 = repository.save(testProduct2);
 
-        // Act
-        List<Product> result = controller.getAll();
-
-        // Assert
-        assertEquals(2, result.size());
-        verify(repository).findAll();
+        mockMvc.perform(get("/products"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].name").value(p1.getName()))
+                .andExpect(jsonPath("$[0].price").value(p1.getPrice()))
+                .andExpect(jsonPath("$[1].name").value(p2.getName()))
+                .andExpect(jsonPath("$[1].price").value(p2.getPrice()));
     }
 
+
+    //Test get 1 product by id
     @Test
-    void getProductById() {
-        // Arrange
-        when(repository.findById(1L)).thenReturn(Optional.of(testProduct));
+    void getProductById() throws Exception {
+        Product p = repository.save(testProduct);
 
-        // Act
-        Product result = controller.getById(1L);
-
-        // Assert
-        assertNotNull(result);
-        assertEquals("Test Product", result.getName());
-        verify(repository).findById(1L);
+        mockMvc.perform(get(URL + "products/" + p.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value(containsString(p.getName())));
     }
 
+    //Test get 1 product by id not found
     @Test
-    void getProductByIdNotFound() {
-        // Arrange
-        when(repository.findById(999L)).thenReturn(Optional.empty());
-
-        // Act & Assert
-        assertThrows(Exception.class, () -> controller.getById(999L));
+    void getProductByIdNotFound() throws Exception {
+        mockMvc.perform(get(URL + "products/999"))
+                .andExpect(status().isNotFound());
     }
 
+    //Test create product
     @Test
-    void createProduct() {
-        // Arrange
-        when(repository.save(any(Product.class))).thenReturn(testProduct);
-
-        // Act
-        Product result = controller.create(testProduct);
-
-        // Assert
-        assertNotNull(result);
-        assertEquals("Test Product", result.getName());
-        verify(repository).save(any(Product.class));
+    void createProduct() throws Exception {
+        mockMvc.perform(post(URL + "products")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(testProduct)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.name").value(containsString(testProduct.getName())));
     }
 
+    //Test update product
     @Test
-    void updateProduct() {
-        // Arrange
-        Product updatedProduct = new Product();
-        updatedProduct.setName("Updated Product");
-        updatedProduct.setPrice(15.0);
+    void updateProduct() throws Exception {
+        Product p = repository.save(testProduct);
 
-        when(repository.findById(1L)).thenReturn(Optional.of(testProduct));
-        when(repository.save(any(Product.class))).thenReturn(updatedProduct);
 
-        // Act
-        Product result = controller.update(1L, updatedProduct);
-
-        // Assert
-        assertEquals("Updated Product", result.getName());
-        assertEquals(15.0, result.getPrice());
-        verify(repository).save(any(Product.class));
+        mockMvc.perform(put(URL + "products/" + p.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(testProduct2)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(p.getId()))
+                .andExpect(jsonPath("$.name").value(containsString(testProduct2.getName())));
     }
 
+    //Test delete product
     @Test
-    void deleteProduct() {
-        // Arrange
-        doNothing().when(repository).deleteById(1L);
+    void deleteProduct() throws Exception {
+        Product p = repository.save(testProduct);
 
-        // Act
-        controller.delete(1L);
+        mockMvc.perform(delete(URL + "products/" + p.getId()))
+                .andExpect(status().isOk());
 
-        // Assert
-        verify(repository).deleteById(1L);
+        mockMvc.perform(get(URL + "products/" + p.getId()))
+                .andExpect(status().isNotFound());
     }
 
+    //Test duplicate product
     @Test
-    void duplicateProduct() {
-        // Arrange
-        Product duplicatedProduct = new Product();
-        duplicatedProduct.setName("Test Product copy");
-        duplicatedProduct.setPrice(10.0);
+    void duplicateProduct() throws Exception {
+        Product p = repository.save(testProduct);
 
-        when(repository.findById(1L)).thenReturn(Optional.of(testProduct));
-        when(repository.save(any(Product.class))).thenReturn(duplicatedProduct);
+        mockMvc.perform(post(URL + "products/" + p.getId() + "/duplicate"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.name").value(containsString(testProduct.getName() + " copy")));
 
-        // Act
-        Product result = controller.duplicate(1L);
-
-        // Assert
-        assertEquals("Test Product copy", result.getName());
-        assertEquals(10.0, result.getPrice());
-        verify(repository).save(any(Product.class));
+        mockMvc.perform(get(URL + "products"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)));
     }
 
+    //Test create bundle
     @Test
-    void createBundleSuccess() {
-        // Arrange
-        when(repository.findById(1L)).thenReturn(Optional.of(testProduct));
-        when(repository.findById(2L)).thenReturn(Optional.of(testProduct2));
-        when(repository.findAll()).thenReturn(Arrays.asList(testProduct, testProduct2));
-        
-        Product expectedBundle = new Product();
-        expectedBundle.setName("Test Product + Test Product 2 + ");
-        expectedBundle.setPrice(30.0);
-        expectedBundle.setSources(Arrays.asList(testProduct, testProduct2));
-        
-        when(repository.save(any(Product.class))).thenReturn(expectedBundle);
+    void createBundle() throws Exception {
+        Product p1 = repository.save(testProduct);
+        Product p2 = repository.save(testProduct2);
 
-        // Act
-        Product result = controller.createBundle(new Long[]{1L, 2L});
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(30.0, result.getPrice());
-        assertEquals("Test Product + Test Product 2 + ", result.getName());
-        assertTrue(result.isBundle());
+        mockMvc.perform(post(URL + "products/bundle")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(new Long[]{p1.getId(), p2.getId()})))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.name").value(containsString(testProduct.getName() + " + " + testProduct2.getName())))
+                .andExpect(jsonPath("$.price").value(30.0))
+                .andExpect(jsonPath("$.sources", hasSize(2)))
+                .andExpect(jsonPath("$.sources[0].id").value(p1.getId()))
+                .andExpect(jsonPath("$.sources[1].id").value(p2.getId()));
     }
 
+    //Test create bundle with duplicate ids
     @Test
-    void createBundleWithDuplicateIds() {
-        // Arrange
-        Long[] duplicateIds = new Long[]{1L, 1L};
-        when(repository.findById(1L)).thenReturn(Optional.of(testProduct));
-        when(repository.findAll()).thenReturn(List.of(testProduct));
+    void createBundleWithDuplicateIds() throws Exception {
+        Product p1 = repository.save(testProduct);
+        Product p2 = repository.save(testProduct2);
 
-        // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> controller.createBundle(duplicateIds));
+        mockMvc.perform(post(URL + "products/bundle")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(new Long[]{p1.getId(), p2.getId(), p1.getId()})))
+                .andExpect(status().isBadRequest());
     }
 
+    //Test create bundle with product already in bundle
     @Test
-    void createBundleWithProductAlreadyInBundle() {
-        // Arrange
-        Product bundle = new Product();
-        bundle.setSources(List.of(testProduct));
-        
-        when(repository.findById(1L)).thenReturn(Optional.of(testProduct));
-        when(repository.findAll()).thenReturn(List.of(bundle));
+    void createBundleWithProductAlreadyInBundle() throws Exception {
+        repository.save(testProduct2);
+        testProduct.setSources(List.of(testProduct2));
 
-        // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> controller.createBundle(new Long[]{1L}));
+        repository.save(testProduct);
+
+        mockMvc.perform(post(URL + "products/bundle")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(new Long[]{testProduct2.getId()})))
+                .andExpect(status().isBadRequest());
     }
 }
